@@ -170,7 +170,7 @@ class PokeAction(BaseAction):
             reason = self.action_data.get("reason", self.reasoning or "无")
             await database_api.store_action_info(
                 chat_stream=self.chat_stream,
-                action_build_into_prompt=True,
+                action_build_into_prompt=False,
                 action_prompt_display=f"使用了戳一戳，原因：{reason}",
                 action_done=True,
                 action_data={"reason": reason},
