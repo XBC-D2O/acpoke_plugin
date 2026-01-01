@@ -62,15 +62,12 @@ class PokeAction(BaseAction):
     # 动作参数定义
     action_parameters = {
         "user_id": "要戳的用户**名称**",
-        "group_id": "群ID",
-        "reply_id": "回复消息ID",
     }
 
     # 动作使用要求
     action_require = [
                         "当你想使用QQ戳一戳功能时",
                         "当别人叫你戳他时使用",
-                        "友好聊天的氛围时使用",
                         "提及某人时使用",
                         "当你觉得对方很可爱时使用",
                         "当你想和对方亲近时使用",
@@ -87,15 +84,11 @@ class PokeAction(BaseAction):
     # 根据用户名称或ID获取实际的用户ID和群组ID
     async def get_user_and_group_id(self) -> Tuple[Optional[str], Optional[str]]:
         user_id_or_name = self.action_data.get("user_id")
-        group_id = self.action_data.get("group_id")
 
-        # 自动从消息对象获取群号
-        if not group_id and hasattr(self, "message") and getattr(self.message, "message_info", None):
+        # 仅从消息对象获取群号
+        group_id = None
+        if hasattr(self, "message") and getattr(self.message, "message_info", None):
             group_id = getattr(self.message.message_info, "group_id", None)
-        if not group_id and hasattr(self, "chat_stream") and getattr(self.chat_stream, "group_id", None):
-            group_id = self.chat_stream.group_id
-        if not group_id and hasattr(self, "group_id"):
-            group_id = self.group_id
 
         if group_id == 'None':
             group_id = None
@@ -115,18 +108,15 @@ class PokeAction(BaseAction):
             except Exception as e:
                 logger.error(f"person_api 查找出错: {e}")
 
-        # 从LLM响应文本中解析群ID和用户ID
-        match_group = re.search(r'group_id:\s*(\d+)', self.llm_response_text)
+        # 从LLM响应文本中解析用户ID
         match_user = re.search(r'user_id:\s*(\d+)', self.llm_response_text)
-        if match_group:
-            group_id = match_group.group(1)
         if match_user:
             return match_user.group(1), group_id
 
         return None, None
 
     # 向群聊中的指定用户发送戳一戳
-    async def _send_group_poke(self, group_id: Optional[str], reply_id: Optional[int], user_id: str):
+    async def _send_group_poke(self, group_id: Optional[str], user_id: str):
         try:
             # 获取目标用户名，如果无法获取则使用用户ID
             target_user_name = self.action_data.get("user_id", user_id)
@@ -150,10 +140,9 @@ class PokeAction(BaseAction):
     # 执行戳一戳动作的主要方法
     async def execute(self) -> Tuple[bool, str]:
         user_id, group_id = await self.get_user_and_group_id()
-        reply_id = self.action_data.get("reply_id")
 
         if POKE_DEBUG:
-            logger.info(f"poke参数: user_id={user_id}, group_id={group_id}")
+            logger.info(f"poke参数: user_id={user_id}")
 
         if not user_id:
             return False, "无法找到目标用户ID"
@@ -168,7 +157,7 @@ class PokeAction(BaseAction):
 
         # 根据是否存在群组ID决定执行群聊戳一戳还是好友戳一戳
         if group_id:
-            ok, result = await self._send_group_poke(group_id, reply_id, user_id)
+            ok, result = await self._send_group_poke(group_id, user_id)
             self.last_poke_group = group_id
         else:
             ok, result = await self._send_friend_poke(user_id)
